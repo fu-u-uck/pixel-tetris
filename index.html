@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tetris</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d0d12;
+            --pattern-color: #15151c;
+            --panel-bg: rgba(30, 30, 36, 0.95);
+            --text-color: #ffffff;
+            --border-color: #ffffff;
+            --accent-color: #00a8f8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            font-family: 'Press Start 2P', monospace;
+            -webkit-tap-highlight-color: transparent;
+            image-rendering: pixelated;
+        }
+
+        @keyframes scrollBackground {
+            0% { background-position: 0 0, 32px 32px; }
+            100% { background-position: -64px 64px, -32px 96px; }
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                linear-gradient(45deg, var(--pattern-color) 25%, transparent 25%, transparent 75%, var(--pattern-color) 75%, var(--pattern-color)), 
+                linear-gradient(45deg, var(--pattern-color) 25%, transparent 25%, transparent 75%, var(--pattern-color) 75%, var(--pattern-color));
+            background-size: 64px 64px;
+            background-position: 0 0, 32px 32px;
+            animation: scrollBackground 15s linear infinite;
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .screen {
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            width: 100%; height: 100%; max-width: 450px; padding: 20px; position: relative;
+        }
+
+        .screen.active { display: flex; }
+
+        h1 {
+            font-size: 2.2rem; margin-bottom: 20px; color: var(--text-color); text-align: center; 
+            line-height: 1.4; background: var(--panel-bg); padding: 20px; 
+            border: 4px solid var(--border-color); box-shadow: 8px 8px 0px #000;
+        }
+
+        h2 { font-size: 1.2rem; margin-bottom: 15px; background: var(--panel-bg); padding: 10px; border: 4px solid var(--border-color); text-align: center; }
+        p { font-size: 0.7rem; line-height: 1.6; text-align: center; }
+
+        button {
+            background-color: #22222a; color: var(--text-color); border: 4px solid var(--border-color);
+            padding: 14px; margin: 8px; font-size: 0.8rem; cursor: pointer; width: 90%; max-width: 280px;
+            text-transform: uppercase; box-shadow: 4px 4px 0px #000; transition: transform 0.1s;
+        }
+        button:active { background-color: var(--text-color); color: #000000; transform: translate(4px, 4px); box-shadow: 0px 0px 0px #000; }
+        
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: 4px 4px 0px #000 !important; background-color: #22222a !important; color: var(--text-color) !important; }
+
+        #btn-about { position: absolute; top: 20px; right: 20px; width: auto; padding: 8px 12px; font-size: 0.6rem; margin: 0; }
+
+        input[type=range] { -webkit-appearance: none; width: 90%; max-width: 280px; background: transparent; margin: 15px 0; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 24px; width: 24px; background: var(--text-color); border: 4px solid #000; cursor: pointer; margin-top: -8px; box-shadow: 2px 2px 0 #000; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 8px; cursor: pointer; background: #22222a; border: 2px solid var(--border-color); }
+
+        .scrollable-list {
+            width: 100%; max-height: 55vh; overflow-y: auto; padding-right: 5px;
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+        }
+        .scrollable-list::-webkit-scrollbar { width: 8px; }
+        .scrollable-list::-webkit-scrollbar-track { background: var(--panel-bg); border: 2px solid var(--border-color); }
+        .scrollable-list::-webkit-scrollbar-thumb { background: var(--text-color); }
+
+        .list-item {
+            background: var(--panel-bg); padding: 12px; border: 4px solid var(--border-color); 
+            width: 100%; max-width: 280px; display: flex; flex-direction: column; align-items: center; gap: 8px; box-shadow: 4px 4px 0px #000;
+        }
+        .list-item span { font-size: 0.65rem; text-align: center; line-height: 1.4; }
+
+        #game-container { display: flex; flex-direction: column; align-items: center; width: 100%; }
+        .stats { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 320px; margin-bottom: 12px; font-size: 0.7rem; background: var(--panel-bg); padding: 12px; border: 4px solid var(--border-color); box-shadow: 4px 4px 0px #000; }
+        .canvas-wrapper { position: relative; border: 4px solid var(--border-color); box-shadow: 6px 6px 0px #000; background-color: #1a1a1a; transition: transform 0.1s; }
+        canvas { display: block; max-height: 50vh; }
+
+        #mobile-controls { display: none; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 15px; width: 100%; max-width: 320px; }
+        .control-btn { background: #22222a; border: 4px solid var(--border-color); height: 50px; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: var(--text-color); box-shadow: 3px 3px 0px #000; text-align: center; }
+        .control-btn:active { background: var(--text-color); color: #000000; transform: translate(3px, 3px); box-shadow: 0px 0px 0px #000; }
+        @media (max-width: 768px) { #mobile-controls { display: grid; } }
+
+        .pwd-input {
+            width: 90%; max-width: 280px; background: #22222a; border: 4px solid var(--border-color);
+            color: #fff; padding: 12px; font-size: 0.8rem; text-align: center; margin: 15px 0;
+            outline: none; font-family: 'Press Start 2P', monospace; box-shadow: inset 3px 3px 0px #000;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="main-menu" class="screen active">
+        <button id="btn-about" onclick="showScreen('about-menu')">ABOUT</button>
+        <h1>TETRIS</h1>
+        <button onclick="startGame()">Старт</button>
+        <button onclick="showScreen('quests-menu')">Задания</button>
+        <button onclick="showScreen('shop-menu')">Магазин</button>
+        <button onclick="showScreen('profile-menu')">Профиль</button>
+    </div>
+
+    <div id="quests-menu" class="screen">
+        <h2>ЗАДАНИЯ</h2>
+        <div class="scrollable-list" id="quests-list">
+            </div>
+        <button onclick="showScreen('main-menu')" style="margin-top: 15px;">Назад</button>
+    </div>
+
+    <div id="about-menu" class="screen">
+        <h2>ИНФО</h2>
+        <div class="list-item" style="margin-bottom: 20px;">
+            <p>owner: vsc33</p>
+        </div>
+        <button onclick="window.open('https://t.me/awdoh', '_blank')" style="font-size: 0.6rem;">Telegram channel</button>
+        <button onclick="showScreen('password-menu')">???</button>
+        <button onclick="showScreen('main-menu')" style="margin-top: 30px;">Назад</button>
+    </div>
+
+    <div id="password-menu" class="screen">
+        <h2>ВХОД</h2>
+        <p style="margin-top: 10px;">Введите секретный пароль:</p>
+        <input type="password" id="dev-password-input" class="pwd-input" placeholder="******">
+        <button onclick="submitDevPassword()">Войти</button>
+        <button onclick="showScreen('about-menu')">Отмена</button>
+    </div>
+
+    <div id="owner-menu" class="screen">
+        <h2>МЕНЮ</h2>
+        <div class="scrollable-list">
+            <span style="font-size: 0.6rem; margin-top: 10px;">СКОРОСТЬ: <span id="speed-val">1.0</span>x</span>
+            <input type="range" min="0.5" max="5" step="0.5" value="1" id="speedhack" oninput="updateSpeedVal()">
+            
+            <button onclick="devAddCoins()">+1000 Монет</button>
+            <button onclick="devUnlockAll()">Все скины/ауры</button>
+            <button id="btn-cheat-god" onclick="toggleCheat('god')">Только 'I': ВЫКЛ</button>
+            <button id="btn-cheat-drunk" onclick="toggleCheat('drunk')">Пьяный: ВЫКЛ</button>
+            <button id="btn-cheat-time" onclick="toggleCheat('time')">Без грав: ВЫКЛ</button>
+            <button id="btn-cheat-blind" onclick="toggleCheat('blind')">Невидимка: ВЫКЛ</button>
+            <button id="btn-cheat-glitch" onclick="toggleCheat('glitch')">Помехи: ВЫКЛ</button>
+            <button onclick="devResetData()">Сброс данных</button>
+        </div>
+        <button onclick="showScreen('about-menu')" style="margin-top: 15px;">Назад</button>
+    </div>
+
+    <div id="gameover-menu" class="screen">
+        <h1>GAME OVER</h1>
+        <div class="list-item" style="margin-bottom: 20px;">
+            <p>Счет:</p>
+            <p id="gameover-score" style="font-size: 1.5rem; margin-top: 15px;">0</p>
+        </div>
+        <button id="btn-revive" onclick="reviveGame()">Возрождение (15 🟡)</button>
+        <button onclick="startGame()">Заново</button>
+        <button onclick="showScreen('main-menu')">В меню</button>
+    </div>
+
+    <div id="game-menu" class="screen">
+        <div id="game-container">
+            <div class="stats" style="flex-direction: row; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="margin-bottom: 10px;">Счет: <span id="score">0</span></div>
+                    <div>Монеты: <span id="game-coins">0</span></div>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                    <span style="font-size: 0.5rem; color: #888;">СЛЕД.</span>
+                    <canvas id="next" width="64" height="64" style="background-color: #1a1a1a; border: 2px solid var(--border-color); display: block;"></canvas>
+                </div>
+            </div>
+            <div class="canvas-wrapper" id="game-wrapper">
+                <canvas id="game" width="320" height="640"></canvas>
+            </div>
+            <div id="mobile-controls">
+                <div class="control-btn" id="btn-rot-l">ПОВ Л</div>
+                <div class="control-btn" id="btn-drop">БРОСЬ</div>
+                <div class="control-btn" id="btn-rot-r">ПОВ П</div>
+                <div class="control-btn" id="btn-left">ЛЕВ</div>
+                <div class="control-btn" id="btn-down">ВНИЗ</div>
+                <div class="control-btn" id="btn-right">ПРАВ</div>
+            </div>
+            <button onclick="endGame()" style="margin-top: 15px; width: auto; padding: 8px 16px;">Выход</button>
+        </div>
+    </div>
+
+    <div id="shop-menu" class="screen">
+        <h2>МАГАЗИН</h2>
+        <div style="background: var(--panel-bg); padding: 10px; border: 4px solid var(--border-color); margin-bottom: 10px;">
+            <p>Монеты: <span id="shop-coins">0</span></p>
+        </div>
+        
+        <div style="display: flex; gap: 10px; width: 100%; max-width: 280px; margin-bottom: 10px;">
+            <button onclick="shopTab('skins')" style="margin:0; padding: 10px; font-size: 0.6rem;">Скины</button>
+            <button onclick="shopTab('auras')" style="margin:0; padding: 10px; font-size: 0.6rem;">Ауры</button>
+            <button onclick="shopTab('wheel')" style="margin:0; padding: 10px; font-size: 0.6rem;">Рулетка</button>
+        </div>
+
+        <div class="scrollable-list" id="shop-list">
+            </div>
+
+        <button onclick="showScreen('main-menu')" style="margin-top: 15px;">Назад</button>
+    </div>
+
+    <div id="profile-menu" class="screen">
+        <h2>ПРОФИЛЬ</h2>
+        <div class="list-item" style="margin: 20px 0; padding: 20px;">
+            <p style="margin-bottom: 15px;">Рекорд: <span id="profile-highscore">0</span></p>
+            <p>Монеты: <span id="profile-coins">0</span></p>
+            <p style="margin-top: 15px; font-size: 0.5rem; color: #aaa;">Игр сыграно: <span id="profile-games">0</span></p>
+        </div>
+        <button onclick="showScreen('main-menu')">Назад</button>
+    </div>
+
+<script>
+    // --- ДАННЫЕ И СОХРАНЕНИЯ (V3) ---
+    let defaultData = {
+        highScore: 0, coins: 0, unlockedThemes: ['default'], currentTheme: 'default',
+        unlockedAuras: ['none'], currentAura: 'none', hasExclusive: false,
+        stats: { lines: 0, games: 0, tetrises: 0, totalCoins: 0 },
+        claimedQuests: []
+    };
+    let userData = JSON.parse(localStorage.getItem('tetrisData_pixel_v3')) || defaultData;
+
+    function saveData() { localStorage.setItem('tetrisData_pixel_v3', JSON.stringify(userData)); updateUI(); }
+
+    // --- БАЗА МАГАЗИНА ---
+    const themePrices = { 'default': 0, 'neon': 20, 'fire': 20, 'matrix': 30, 'gameboy': 40, 'vaporwave': 50, 'blood': 60, 'gold': 100, 'rainbow': 500 };
+    const themeNames = { 'default': 'База', 'neon': 'Неон', 'fire': 'Огонь', 'matrix': 'Матрица', 'gameboy': 'GameBoy', 'vaporwave': 'Vaporwave', 'blood': 'Кровавый', 'gold': 'Золото', 'rainbow': 'Радуга', 'cosmic': '★| Космос' };
+    const themes = {
+        default: ['#000000', '#00a8f8', '#38bdf8', '#7dd3fc', '#0284c7', '#0058f8', '#0000bc', '#3b82f6'],
+        neon: ['#000000', '#fc00fc', '#00f800', '#f8f800', '#f80000', '#00f8f8', '#f87800', '#a800f8'],
+        fire: ['#000000', '#f83800', '#f87800', '#f8b800', '#f8f800', '#ac3232', '#df7126', '#8f2424'],
+        matrix: ['#000000', '#003300', '#006600', '#009900', '#00cc00', '#00ff00', '#33ff33', '#66ff66'],
+        gameboy: ['#000000', '#0f380f', '#306230', '#8bac0f', '#9bbc0f', '#8bac0f', '#306230', '#0f380f'],
+        vaporwave: ['#000000', '#ff71ce', '#01cdfe', '#05ffa1', '#b967ff', '#fffb96', '#ff71ce', '#01cdfe'],
+        blood: ['#000000', '#330000', '#660000', '#990000', '#cc0000', '#ff0000', '#ff3333', '#990000'],
+        gold: ['#000000', '#b8860b', '#daa520', '#ffd700', '#f8e473', '#ffebcd', '#fff8dc', '#ffdf00'],
+        rainbow: ['#000000', '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3'],
+        cosmic: ['#000000', '#10002b', '#240046', '#3c096c', '#5a189a', '#7b2cbf', '#9d4edd', '#c8b6ff']
+    };
+
+    const auraPrices = { 'none': 0, 'fire': 50, 'ice': 50, 'matrix': 100 };
+    const auraNames = { 'none': 'Без ауры', 'fire': 'Огненный след', 'ice': 'Ледяная пыль', 'matrix': 'Матрица' };
+
+    // --- ЗАДАНИЯ ---
+    const quests = [
+        { id: 'q1', desc: 'Очистить всего 50 линий', goal: 50, getProg: () => userData.stats.lines, reward: 50 },
+        { id: 'q2', desc: 'Сыграть 10 полных матчей', goal: 10, getProg: () => userData.stats.games, reward: 30 },
+        { id: 'q3', desc: 'Очистить 4 линии за раз 5 раз', goal: 5, getProg: () => userData.stats.tetrises, reward: 100 },
+        { id: 'q4', desc: 'Заработать всего 500 монет', goal: 500, getProg: () => userData.stats.totalCoins, reward: 150 }
+    ];
+
+    // --- КНОПКИ УПРАВЛЕНИЯ ---
+    let cheats = { god: false, drunk: false, time: false, blind: false, glitch: false };
+    function updateSpeedVal() { document.getElementById('speed-val').innerText = document.getElementById('speedhack').value; }
+    function toggleCheat(type) {
+        cheats[type] = !cheats[type];
+        let btn = document.getElementById(`btn-cheat-${type}`);
+        
+        let texts = {
+            'god': `Только 'I': ${cheats.god ? 'ВКЛ' : 'ВЫКЛ'}`,
+            'drunk': `Пьяный: ${cheats.drunk ? 'ВКЛ' : 'ВЫКЛ'}`,
+            'time': `Без грав: ${cheats.time ? 'ВКЛ' : 'ВЫКЛ'}`,
+            'blind': `Невидимка: ${cheats.blind ? 'ВКЛ' : 'ВЫКЛ'}`,
+            'glitch': `Помехи: ${cheats.glitch ? 'ВКЛ' : 'ВЫКЛ'}`
+        };
+        btn.innerText = texts[type];
+        if(type === 'drunk') document.getElementById('game-wrapper').style.transform = 'none';
+    }
+
+    // --- ИГРОВОЙ ДВИЖОК ---
+    const canvas = document.getElementById('game'); const context = canvas.getContext('2d'); const grid = 32;
+    let playfield = [], sequence = [], rAF = null, gameOver = false, score = 0, nextCoinThreshold = 1000, count = 0;
+    let particles = [], floatingTexts = [], shakeTime = 0, shakeIntensity = 0, flashTime = 0;
+    let tetromino = null, nextTetromino = null;
+
+    const tetrominos = {
+        'I': [[0,0,0,0], [1,1,1,1], [0,0,0,0], [0,0,0,0]], 'J': [[2,0,0], [2,2,2], [0,0,0]], 'L': [[0,0,3], [3,3,3], [0,0,0]],
+        'O': [[4,4], [4,4]], 'S': [[0,5,5], [5,5,0], [0,0,0]], 'Z': [[6,6,0], [0,6,6], [0,0,0]], 'T': [[0,7,0], [7,7,7], [0,0,0]]
+    };
+
+    function getRandomInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+    function getBoardStats() {
+        let heights = new Array(10).fill(0);
+        for (let c=0; c<10; c++) for (let r=0; r<20; r++) if (playfield[r][c]) { heights[c] = 20-r; break; }
+        let needsI = false;
+        for (let c=0; c<10; c++) {
+            let leftH = (c===0)?20:heights[c-1], rightH = (c===9)?20:heights[c+1];
+            if (Math.min(leftH, rightH) - heights[c] >= 3) needsI = true;
+        }
+        return { maxH: Math.max(...heights), needsI };
+    }
+
+    function generateSequence() {
+        const names = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+        while (names.length) sequence.push(names.splice(getRandomInt(0, names.length - 1), 1)[0]);
+    }
+
+    function getNextTetromino() {
+        if (sequence.length === 0) generateSequence();
+        let name = sequence[sequence.length - 1];
+        
+        if (cheats.god) name = 'I';
+        else {
+            let stats = getBoardStats();
+            if (stats.needsI && Math.random() < 0.60) { 
+                name = 'I'; let iIndex = sequence.indexOf('I'); if(iIndex>-1) sequence.splice(iIndex,1); else sequence.pop();
+            } else if (stats.maxH > 14 && (name === 'S' || name === 'Z') && Math.random() < 0.70) {
+                name = ['I', 'T', 'L', 'J', 'O'][getRandomInt(0, 4)]; sequence.pop();
+            } else name = sequence.pop();
+        }
+        return { name, matrix: tetrominos[name], row: name === 'I' ? -1 : -2, col: 5 - Math.ceil(tetrominos[name][0].length / 2) };
+    }
+
+    function rotateCW(m) { const N = m.length - 1; return m.map((r, i) => r.map((v, j) => m[N - j][i])); }
+    function rotateCCW(m) { const N = m.length - 1; return m.map((r, i) => r.map((v, j) => m[j][N - i])); }
+    function isValidMove(m, cr, cc) {
+        for (let r=0; r<m.length; r++) for (let c=0; c<m[r].length; c++) if (m[r][c]) {
+            let fr=cr+r, fc=cc+c; if (fc<0 || fc>=10 || fr>=20) return false; if (fr>=0 && playfield[fr][fc]) return false;
+        } return true;
+    }
+
+    function applyShake(time, intensity) { shakeTime = time; shakeIntensity = intensity; }
+
+    function drawNextPiece() {
+        const nextCanvas = document.getElementById('next');
+        const nextContext = nextCanvas.getContext('2d');
+        nextContext.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+        
+        if (!nextTetromino) return;
+        
+        const matrix = nextTetromino.matrix;
+        const name = nextTetromino.name;
+        const nGrid = 16; 
+        
+        let offsetX = 0;
+        let offsetY = 0;
+        
+        // Фиксированная ручная центровка для идеального выравнивания по середине с опусканием
+        if (name === 'O') {
+            offsetX = 16;
+            offsetY = 16;
+        } else if (name === 'I') {
+            offsetX = 0;
+            offsetY = 12; 
+        } else {
+            // Для всех остальных фигур 3x3 (J, L, S, Z, T) сдвигаем ниже
+            offsetX = 8;
+            offsetY = 20; 
+        }
+        
+        // 1. Рисуем сплошную пиксельную белую обводку под фигурой (смещение -2px)
+        nextContext.fillStyle = '#ffffff';
+        for (let r = 0; r < matrix.length; r++) {
+            for (let c = 0; c < matrix[r].length; c++) {
+                if (matrix[r][c]) {
+                    const x = offsetX + c * nGrid;
+                    const y = offsetY + r * nGrid;
+                    nextContext.fillRect(x - 2, y - 2, nGrid + 4, nGrid + 4);
+                }
+            }
+        }
+        
+        // 2. Рисуем поверх цветные блоки самой фигуры
+        for (let r = 0; r < matrix.length; r++) {
+            for (let c = 0; c < matrix[r].length; c++) {
+                if (matrix[r][c]) {
+                    const x = offsetX + c * nGrid;
+                    const y = offsetY + r * nGrid;
+                    nextContext.fillStyle = getColor(name);
+                    nextContext.fillRect(x, y, nGrid, nGrid);
+                    
+                    nextContext.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                    nextContext.fillRect(x, y, nGrid, 2);
+                    nextContext.fillRect(x, y, 2, nGrid);
+                    
+                    nextContext.fillStyle = 'rgba(0, 0, 0, 0.35)';
+                    nextContext.fillRect(x, y + nGrid - 2, nGrid, 2);
+                    nextContext.fillRect(x + nGrid - 2, y, 2, nGrid);
+                }
+            }
+        }
+    }
+
+    function placeTetromino() {
+        for (let r=0; r<tetromino.matrix.length; r++) for (let c=0; c<tetromino.matrix[r].length; c++) if (tetromino.matrix[r][c]) {
+            if (tetromino.row + r < 0) return showGameOver(); playfield[tetromino.row + r][tetromino.col + c] = tetromino.name;
+        }
+        applyShake(5, 3);
+        let linesCleared = 0, lowestRow = 0;
+        for (let r = 19; r >= 0; ) {
+            if (playfield[r].every(cell => !!cell)) {
+                linesCleared++; lowestRow = r;
+                for(let c=0;c<10;c++) for(let i=0;i<4;i++) particles.push({ x:c*grid+16,y:r*grid+16,vx:getRandomInt(-6,6),vy:getRandomInt(-8,-2),life:30,size:getRandomInt(4,8),color:getColor(playfield[r][0]) });
+                for (let c=r; c>=1; c--) playfield[c] = [...playfield[c-1]]; playfield[0] = new Array(10).fill(0);
+            } else r--;
+        }
+
+        if (linesCleared > 0) {
+            userData.stats.lines += linesCleared;
+            if (linesCleared === 4) userData.stats.tetrises += 1;
+
+            const points = [0, 100, 300, 500, 1000]; score += points[linesCleared];
+            applyShake(20, 8 + linesCleared * 2); flashTime = 3;
+            floatingTexts.push({ text: `+${points[linesCleared]}`, x: canvas.width / 2, y: lowestRow * grid, life: 40 });
+            if (linesCleared === 4) floatingTexts.push({ text: "TETRIS!", x: canvas.width / 2, y: lowestRow * grid - 30, life: 40 });
+            
+            if (score >= nextCoinThreshold) { 
+                userData.coins += 10; userData.stats.totalCoins += 10; nextCoinThreshold += 1000; saveData(); 
+                document.getElementById('game-coins').innerText = userData.coins;
+            }
+            document.getElementById('score').innerText = score;
+        }
+        tetromino = nextTetromino;
+        nextTetromino = getNextTetromino();
+        drawNextPiece();
+    }
+
+    function getGhostRow() { let gr = tetromino.row; while(isValidMove(tetromino.matrix, gr+1, tetromino.col)) gr++; return gr; }
+
+    function drawBlock(x, y, color, isGhost = false) {
+        context.save();
+        if (isGhost) { context.strokeStyle = color; context.lineWidth = 2; context.globalAlpha = 0.4; context.strokeRect(x+2, y+2, grid-4, grid-4); } 
+        else {
+            context.fillStyle = color; context.fillRect(x, y, grid, grid);
+            context.fillStyle = 'rgba(255, 255, 255, 0.4)'; context.fillRect(x, y, grid, 3); context.fillRect(x, y, 3, grid);
+            context.fillStyle = 'rgba(0, 0, 0, 0.35)'; context.fillRect(x, y+grid-3, grid, 3); context.fillRect(x+grid-3, y, 3, grid);
+        } context.restore();
+    }
+
+    function getColor(name) { 
+        if (name === 'GLITCH') return '#3a3a3d';
+        return themes[userData.currentTheme][{'I':1,'J':2,'L':3,'O':4,'S':5,'Z':6,'T':7}[name]] || '#ffffff'; 
+    }
+
+    function emitAura() {
+        if(userData.currentAura === 'none' || count % 2 !== 0) return;
+        let c = tetromino.col * grid + getRandomInt(0, grid*tetromino.matrix[0].length);
+        let r = tetromino.row * grid + getRandomInt(0, grid*tetromino.matrix.length);
+        
+        if (userData.currentAura === 'fire') particles.push({ x:c, y:r, vx:getRandomInt(-1,1), vy:getRandomInt(-3,-1), life:15, size:4, color:'#ff4500' });
+        if (userData.currentAura === 'ice') particles.push({ x:c, y:r, vx:getRandomInt(-1,1), vy:getRandomInt(1,3), life:15, size:3, color:'#00ffff' });
+        if (userData.currentAura === 'matrix') particles.push({ x:c, y:r, vx:0, vy:getRandomInt(2,5), life:20, size:5, color:'#00ff00' });
+    }
+
+    function loop() {
+        rAF = requestAnimationFrame(loop); context.clearRect(0, 0, canvas.width, canvas.height); context.save();
+        
+        if (cheats.drunk) document.getElementById('game-wrapper').style.transform = `rotate(${Math.sin(Date.now()/300)*8}deg) scale(${1+Math.sin(Date.now()/200)*0.05})`;
+        if (shakeTime > 0) { context.translate(getRandomInt(-shakeIntensity, shakeIntensity), getRandomInt(-shakeIntensity, shakeIntensity)); shakeTime--; }
+
+        for (let r=0; r<20; r++) for (let c=0; c<10; c++) { context.fillStyle = (r+c)%2===0 ? '#1a1a1f' : '#22222a'; context.fillRect(c*grid, r*grid, grid, grid); }
+        context.strokeStyle = '#111116'; context.lineWidth = 1;
+        for (let i=0; i<=canvas.width; i+=grid) { context.beginPath(); context.moveTo(i,0); context.lineTo(i,canvas.height); context.stroke(); }
+        for (let i=0; i<=canvas.height; i+=grid) { context.beginPath(); context.moveTo(0,i); context.lineTo(canvas.width,i); context.stroke(); }
+
+        for (let r=0; r<20; r++) for (let c=0; c<10; c++) if (playfield[r][c] && !cheats.blind) drawBlock(c*grid, r*grid, getColor(playfield[r][c]));
+
+        if (cheats.glitch && Math.random() < 0.005) {
+            let gc = getRandomInt(0,9);
+            for(let gr=0; gr<20; gr++) if(!playfield[gr][gc] && (gr===19 || playfield[gr+1][gc])) { playfield[gr][gc] = 'GLITCH'; break; }
+        }
+
+        if (tetromino) {
+            let speedMult = parseFloat(document.getElementById('speedhack').value);
+            // Уменьшено базовое значение 35 на 20, чтобы увеличить базовую скорость
+            let speedLimit = Math.max(2, (20 - Math.floor(score / 1500) * 4) / speedMult);
+            if (!cheats.time && ++count > speedLimit) {
+                tetromino.row++; count = 0; if (!isValidMove(tetromino.matrix, tetromino.row, tetromino.col)) { tetromino.row--; placeTetromino(); }
+            }
+            emitAura();
+            let ghostRow = getGhostRow();
+            for (let r=0; r<tetromino.matrix.length; r++) for (let c=0; c<tetromino.matrix[r].length; c++) if (tetromino.matrix[r][c]) drawBlock((tetromino.col+c)*grid, (ghostRow+r)*grid, getColor(tetromino.name), true);
+            for (let r=0; r<tetromino.matrix.length; r++) for (let c=0; c<tetromino.matrix[r].length; c++) if (tetromino.matrix[r][c]) drawBlock((tetromino.col+c)*grid, (tetromino.row+r)*grid, getColor(tetromino.name));
+        }
+
+        for (let i=particles.length-1; i>=0; i--) {
+            let p = particles[i]; p.x+=p.vx; p.y+=p.vy; if(!['matrix','ice'].includes(userData.currentAura)) p.vy+=0.4; p.life--;
+            if (p.life<=0) { particles.splice(i,1); continue; } context.fillStyle=p.color; context.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
+        }
+
+        context.textAlign="center"; context.font="16px 'Press Start 2P'";
+        for (let i=floatingTexts.length-1; i>=0; i--) {
+            let ft = floatingTexts[i]; ft.y-=1; ft.life--; if(ft.life<=0) { floatingTexts.splice(i,1); continue; }
+            context.fillStyle=`rgba(255,255,255,${ft.life/40})`; context.fillText(ft.text, ft.x, ft.y);
+            context.strokeStyle=`rgba(0,0,0,${ft.life/40})`; context.lineWidth=3; context.strokeText(ft.text, ft.x, ft.y); context.fillText(ft.text, ft.x, ft.y);
+        }
+        if (flashTime>0) { context.fillStyle=`rgba(255,255,255,${flashTime*0.25})`; context.fillRect(0,0,canvas.width,canvas.height); flashTime--; }
+        context.restore();
+    }
+
+    // --- УПРАВЛЕНИЕ ---
+    function actionLeft() { if(tetromino && isValidMove(tetromino.matrix, tetromino.row, tetromino.col-1)) tetromino.col--; }
+    function actionRight() { if(tetromino && isValidMove(tetromino.matrix, tetromino.row, tetromino.col+1)) tetromino.col++; }
+    function actionDown() { if(!tetromino) return; tetromino.row++; if(!isValidMove(tetromino.matrix, tetromino.row, tetromino.col)) { tetromino.row--; placeTetromino(); } }
+    function actionRotateCW() { if(!tetromino) return; let m = rotateCW(tetromino.matrix); if(isValidMove(m, tetromino.row, tetromino.col)) tetromino.matrix = m; }
+    function actionRotateCCW() { if(!tetromino) return; let m = rotateCCW(tetromino.matrix); if(isValidMove(m, tetromino.row, tetromino.col)) tetromino.matrix = m; }
+    function actionHardDrop() { if(!tetromino) return; let r = getGhostRow(); applyShake(10, Math.min(10, r-tetromino.row)); for(let c=tetromino.col;c<tetromino.col+tetromino.matrix[0].length;c++) for(let i=0;i<3;i++) particles.push({ x:c*grid+16,y:r*grid+12,vx:getRandomInt(-3,3),vy:getRandomInt(-4,0),life:15,size:4,color:'#ffffff' }); tetromino.row=r; placeTetromino(); }
+
+    document.addEventListener('keydown', e => {
+        if(e.key==='ArrowLeft'||e.key==='a') actionLeft(); if(e.key==='ArrowRight'||e.key==='d') actionRight();
+        if(e.key==='ArrowUp'||e.key==='w'||e.key==='x') actionRotateCW(); if(e.key==='z'||e.key==='Control') actionRotateCCW();
+        if(e.key==='ArrowDown'||e.key==='s') actionDown(); if(e.key===' ') actionHardDrop();
+    });
+    document.getElementById('btn-left').onpointerdown=e=>{e.preventDefault();actionLeft();}; document.getElementById('btn-right').onpointerdown=e=>{e.preventDefault();actionRight();};
+    document.getElementById('btn-down').onpointerdown=e=>{e.preventDefault();actionDown();}; document.getElementById('btn-rot-r').onpointerdown=e=>{e.preventDefault();actionRotateCW();};
+    document.getElementById('btn-rot-l').onpointerdown=e=>{e.preventDefault();actionRotateCCW();}; document.getElementById('btn-drop').onpointerdown=e=>{e.preventDefault();actionHardDrop();};
+
+    // --- ИНТЕРФЕЙС, МАГАЗИН, КВЕСТЫ ---
+    function showScreen(id) { 
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); 
+        document.getElementById(id).classList.add('active'); 
+        if(id === 'shop-menu') shopTab('skins');
+        if(id === 'quests-menu') buildQuests();
+        if(id === 'password-menu') { document.getElementById('dev-password-input').value = ''; }
+        updateUI(); 
+    }
+    
+    function startGame() {
+        showScreen('game-menu'); playfield = Array.from({length:20}, ()=>new Array(10).fill(0));
+        score = 0; nextCoinThreshold = 1000; gameOver = false; particles = []; floatingTexts = []; flashTime = 0; count=0;
+        document.getElementById('score').innerText = score; document.getElementById('game-coins').innerText = userData.coins;
+        document.getElementById('game-wrapper').style.transform = 'none';
+        tetromino = getNextTetromino();
+        nextTetromino = getNextTetromino();
+        drawNextPiece();
+        cancelAnimationFrame(rAF); rAF = requestAnimationFrame(loop);
+    }
+
+    function showGameOver() {
+        gameOver = true; cancelAnimationFrame(rAF); userData.stats.games++;
+        if (score > userData.highScore) userData.highScore = score; saveData();
+        document.getElementById('gameover-score').innerText = score; 
+        document.getElementById('btn-revive').disabled = userData.coins < 15;
+        showScreen('gameover-menu');
+    }
+
+    function reviveGame() {
+        if (userData.coins < 15) return alert("НЕДОСТАТОЧНО МОНЕТ!");
+        userData.coins -= 15; saveData();
+        for (let r = 0; r < 10; r++) playfield[r] = new Array(10).fill(0);
+        
+        gameOver = false; showScreen('game-menu');
+        document.getElementById('game-coins').innerText = userData.coins;
+        tetromino = getNextTetromino();
+        nextTetromino = getNextTetromino();
+        drawNextPiece();
+        count = 0;
+        cancelAnimationFrame(rAF); rAF = requestAnimationFrame(loop);
+    }
+
+    function endGame() { 
+        cancelAnimationFrame(rAF); 
+        gameOver = true; 
+        userData.stats.games++; 
+        if (score > userData.highScore) userData.highScore = score; 
+        saveData(); 
+        showScreen('main-menu'); 
+    }
+
+    function shopTab(tab) {
+        const list = document.getElementById('shop-list'); list.innerHTML = '';
+        if (tab === 'skins') {
+            Object.keys(themePrices).forEach(theme => {
+                let item = document.createElement('div'); item.className = 'list-item';
+                let btn = document.createElement('button'); btn.id = `btn-${theme}`; btn.style.margin='0'; btn.style.width='100%';
+                btn.onclick = () => buyTheme(theme, themePrices[theme]);
+                item.innerHTML = `<span>Скин: ${themeNames[theme]}</span>`; item.appendChild(btn); list.appendChild(item);
+            });
+            if (userData.hasExclusive || userData.unlockedThemes.includes('cosmic')) {
+                let item = document.createElement('div'); item.className = 'list-item';
+                let btn = document.createElement('button'); btn.id = `btn-cosmic`; btn.style.margin='0'; btn.style.width='100%';
+                btn.onclick = () => { userData.currentTheme = 'cosmic'; saveData(); };
+                item.innerHTML = `<span>Скин: ${themeNames['cosmic']}</span>`; item.appendChild(btn); list.appendChild(item);
+            }
+        } else if (tab === 'auras') {
+            Object.keys(auraPrices).forEach(aura => {
+                let item = document.createElement('div'); item.className = 'list-item';
+                let btn = document.createElement('button'); btn.id = `btn-aura-${aura}`; btn.style.margin='0'; btn.style.width='100%';
+                btn.onclick = () => buyAura(aura, auraPrices[aura]);
+                item.innerHTML = `<span>Аура: ${auraNames[aura]}</span>`; item.appendChild(btn); list.appendChild(item);
+            });
+        } else if (tab === 'wheel') {
+            let item = document.createElement('div'); item.className = 'list-item';
+            item.innerHTML = `<span style="margin-bottom:10px;">Цена: 50 Монет<br>Выиграй эксклюзив!</span>`;
+            let btn = document.createElement('button'); btn.id='btn-spin'; btn.innerText='КРУТИТЬ'; btn.style.margin='0'; btn.style.width='100%';
+            btn.onclick = spinWheel;
+            item.appendChild(btn); list.appendChild(item);
+        }
+        updateUI();
+    }
+
+    function spinWheel() {
+        if (userData.coins < 50) return alert("НЕТ ДЕНЕГ!");
+        userData.coins -= 50; saveData();
+        let btn = document.getElementById('btn-spin'); btn.disabled = true;
+        let outcomes = ['0 МОНЕТ', '10 МОНЕТ', '20 МОНЕТ', '100 МОНЕТ (ДЖЕКПОТ)'];
+        if (!userData.hasExclusive) outcomes.push('СЕКРЕТНЫЙ СКИН');
+        
+        let ticks = 0;
+        let interval = setInterval(() => {
+            btn.innerText = outcomes[getRandomInt(0, outcomes.length-1)]; ticks++;
+            if (ticks > 20) {
+                clearInterval(interval);
+                let final = Math.random(); let result = '';
+                if (final < 0.4) result = '0 МОНЕТ';
+                else if (final < 0.7) { result = '10 МОНЕТ'; userData.coins+=10; userData.stats.totalCoins+=10; }
+                else if (final < 0.9) { result = '20 МОНЕТ'; userData.coins+=20; userData.stats.totalCoins+=20; }
+                else if (final < 0.98) { result = '100 МОНЕТ (ДЖЕКПОТ)'; userData.coins+=100; userData.stats.totalCoins+=100; }
+                else if (!userData.hasExclusive) { result = 'СЕКРЕТНЫЙ СКИН'; userData.hasExclusive = true; userData.unlockedThemes.push('cosmic'); }
+                else { result = '20 МОНЕТ'; userData.coins+=20; }
+                btn.innerText = `ВЫПАЛО: ${result}`; saveData();
+                setTimeout(()=> { btn.innerText='КРУТИТЬ'; btn.disabled = false; }, 2000);
+            }
+        }, 100);
+    }
+
+    function buildQuests() {
+        const list = document.getElementById('quests-list'); list.innerHTML = '';
+        quests.forEach(q => {
+            let prog = Math.min(q.getProg(), q.goal);
+            let claimed = userData.claimedQuests.includes(q.id);
+            let item = document.createElement('div'); item.className = 'list-item';
+            item.innerHTML = `<span>${q.desc}<br>(${prog}/${q.goal})</span>`;
+            let btn = document.createElement('button'); btn.style.margin='0'; btn.style.width='100%';
+            if (claimed) { btn.innerText = "ВЫПОЛНЕНО"; btn.disabled = true; }
+            else if (prog >= q.goal) { btn.innerText = `ЗАБРАТЬ ${q.reward} 🟡`; btn.onclick = () => claimQuest(q.id, q.reward); }
+            else { btn.innerText = "В ПРОЦЕССЕ"; btn.disabled = true; }
+            item.appendChild(btn); list.appendChild(item);
+        });
+    }
+
+    function claimQuest(id, reward) {
+        userData.coins += reward; userData.stats.totalCoins += reward; userData.claimedQuests.push(id); saveData(); buildQuests();
+    }
+
+    function updateUI() {
+        document.getElementById('profile-highscore').innerText = userData.highScore;
+        document.getElementById('profile-coins').innerText = userData.coins;
+        document.getElementById('profile-games').innerText = userData.stats.games;
+        if(document.getElementById('shop-coins')) document.getElementById('shop-coins').innerText = userData.coins;
+
+        Object.keys(themePrices).forEach(t => {
+            let btn = document.getElementById(`btn-${t}`); if (!btn) return;
+            if (userData.currentTheme === t) { btn.innerText = "АКТИВЕН"; }
+            else if (userData.unlockedThemes.includes(t)) { btn.innerText = "НАДЕТЬ"; }
+            else { btn.innerText = themePrices[t] + " МОНЕТ"; }
+        });
+        if(document.getElementById('btn-cosmic')) document.getElementById('btn-cosmic').innerText = userData.currentTheme === 'cosmic' ? 'АКТИВЕН' : 'НАДЕТЬ';
+
+        Object.keys(auraPrices).forEach(a => {
+            let btn = document.getElementById(`btn-aura-${a}`); if (!btn) return;
+            if (userData.currentAura === a) { btn.innerText = "АКТИВНА"; }
+            else if (userData.unlockedAuras.includes(a)) { btn.innerText = "НАДЕТЬ"; }
+            else { btn.innerText = auraPrices[a] + " МОНЕТ"; }
+        });
+    }
+
+    function buyTheme(t, p) {
+        if (userData.unlockedThemes.includes(t)) { userData.currentTheme = t; saveData(); return; }
+        if (userData.coins >= p) { userData.coins -= p; userData.unlockedThemes.push(t); userData.currentTheme = t; saveData(); }
+    }
+    function buyAura(a, p) {
+        if (userData.unlockedAuras.includes(a)) { userData.currentAura = a; saveData(); return; }
+        if (userData.coins >= p) { userData.coins -= p; userData.unlockedAuras.push(a); userData.currentAura = a; saveData(); }
+    }
+
+    function submitDevPassword() {
+        let pwd = document.getElementById('dev-password-input').value;
+        if (pwd === "80085") {
+            showScreen('owner-menu');
+        } else {
+            alert("ОТКАЗ В ДОСТУПЕ!");
+            showScreen('about-menu');
+        }
+    }
+
+    function devAddCoins() { userData.coins += 1000; userData.stats.totalCoins += 1000; saveData(); alert("УСПЕХ"); }
+    function devUnlockAll() { 
+        Object.keys(themePrices).forEach(t => { if(!userData.unlockedThemes.includes(t)) userData.unlockedThemes.push(t); }); 
+        Object.keys(auraPrices).forEach(a => { if(!userData.unlockedAuras.includes(a)) userData.unlockedAuras.push(a); }); 
+        userData.hasExclusive = true;
+        if(!userData.unlockedThemes.includes('cosmic')) userData.unlockedThemes.push('cosmic');
+        saveData(); alert("ВСЕ ОТКРЫТО"); 
+    }
+    function devResetData() { if (confirm("Стереть всё?")) { userData = JSON.parse(JSON.stringify(defaultData)); saveData(); alert("СБРОШЕНО"); } }
+
+    updateUI();
+</script>
+</body>
+</html>
